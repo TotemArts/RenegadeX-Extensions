@@ -1,0 +1,19 @@
+[package]
+name = "renxhook"
+version = "0.1.0"
+edition = "2018"
+
+[workspace]
+members = ["winbindings"]
+
+[lib]
+name = "XAPOFX1_5"
+crate-type = ["cdylib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = "1.4.0"
+libloading = "0.7.0"
+sha2 = "0.9.5"
+winbindings = { path = "./winbindings" }
