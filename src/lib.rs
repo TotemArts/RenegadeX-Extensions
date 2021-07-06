@@ -12,26 +12,33 @@ const UDK_KNOWN_HASH: [u8; 32] = [
 
 use sha2::{Digest, Sha256};
 
-use winbindings::Windows::Win32::{
-    Foundation::{HANDLE, HINSTANCE},
-    System::{
-        LibraryLoader::GetModuleHandleA,
-        ProcessStatus::{K32GetModuleInformation, MODULEINFO},
-        SystemServices::{
-            DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH,
+use winbindings::{
+    Windows::Win32::{
+        Foundation::{HANDLE, HINSTANCE},
+        System::{
+            LibraryLoader::GetModuleHandleA,
+            ProcessStatus::{K32GetModuleInformation, MODULEINFO},
+            SystemServices::{
+                DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH,
+            },
+            Threading::GetCurrentProcess,
         },
-        Threading::GetCurrentProcess,
     },
+    HRESULT,
 };
 
+/// Cached slice of UDK.exe. This is only touched once upon init, and
+/// never written again.
 static mut UDK_SLICE: Option<&'static [u8]> = None;
 
+/// Return a slice of UDK.exe
 pub fn get_udk_slice() -> &'static [u8] {
     // SAFETY: This is only touched once in DllMain.
     unsafe { UDK_SLICE.unwrap() }
 }
 
-fn get_module_information(process: HANDLE, module: HINSTANCE) -> Result<MODULEINFO, ()> {
+/// Wrapped version of the Win32 GetModuleInformation.
+fn get_module_information(process: HANDLE, module: HINSTANCE) -> Result<MODULEINFO, HRESULT> {
     let mut module_info = MODULEINFO {
         ..Default::default()
     };
@@ -46,7 +53,7 @@ fn get_module_information(process: HANDLE, module: HINSTANCE) -> Result<MODULEIN
         .as_bool()
     } {
         true => Ok(module_info),
-        false => Err(()),
+        false => Err(HRESULT::from_thread()),
     }
 }
 
@@ -61,11 +68,14 @@ fn get_process_slice() -> &'static [u8] {
     }
 }
 
+/// Called upon DLL attach. This function verifies the UDK and initializes
+/// hooks if the UDK matches our known hash.
 fn dll_attach() -> anyhow::Result<()> {
     // Now that we're attached, let's hash the UDK executable.
     // If the hash does not match what we think it should be, do not attach detours.
     let exe = get_process_slice();
 
+    // Hash the first 256 bytes until we can figure out rw sections.
     let hash = {
         let mut sha = Sha256::new();
         sha.update(&exe[..256]);
