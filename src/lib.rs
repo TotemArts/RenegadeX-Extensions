@@ -106,7 +106,10 @@ pub extern "stdcall" fn DllMain(
 ) -> i32 {
     match fdw_reason {
         DLL_PROCESS_ATTACH => {
-            dll_attach().unwrap();
+            if let Err(e) = dll_attach() {
+                // Print a debug message for anyone who's listening.
+                eprintln!("{:?}", e);
+            }
         }
         DLL_PROCESS_DETACH => {}
 
