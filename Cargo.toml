@@ -7,13 +7,17 @@ edition = "2018"
 members = ["winbindings"]
 
 [lib]
-name = "XAPOFX1_5"
+name = "dinput8"
 crate-type = ["cdylib"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.41"
+com = "0.4.0"
+detour = { git = "https://github.com/darfink/detour-rs.git" }
 lazy_static = "1.4.0"
 libloading = "0.7.0"
 sha2 = "0.9.5"
+widestring = "0.4.3"
 winbindings = { path = "./winbindings" }
