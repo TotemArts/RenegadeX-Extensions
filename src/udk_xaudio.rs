@@ -1,19 +1,13 @@
 //! This module contains functionality related to UDK XAudio hooks.
-use std::ffi::c_void;
-
 use anyhow::Context;
 use detour::static_detour;
 use widestring::WideChar;
-use winbindings::Guid;
-use winbindings::Windows::Win32::Foundation::BOOL;
 
 use crate::get_udk_slice;
-use crate::udk_log;
+use crate::udk_log::{log, LogType};
 
-use winbindings::Windows::Win32::Media::{
-    Audio::{CoreAudio, XAudio2},
-    Multimedia::{self, WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVEFORMATEXTENSIBLE_0},
-};
+use winbindings::Windows::Win32::Foundation::BOOL;
+use winbindings::Windows::Win32::Media::{Audio::XAudio2, Multimedia::WAVEFORMATEXTENSIBLE};
 use winbindings::HRESULT;
 
 // const UDK_INITHW_OFFSET: usize = 0x0171_1ED0;
@@ -33,6 +27,54 @@ struct XAudio27DeviceDetails {
     OutputFormat: WAVEFORMATEXTENSIBLE,
 }
 
+/// Represents the VTable for XAudio 2.7's IXAudio2EngineCallback object.
+///
+/// Do _NOT_ alter the ordering of these fields.
+#[repr(C)]
+#[allow(non_snake_case)]
+struct XAudio27CallbacksVtable {
+    OnProcessingPassStart: Option<extern "C" fn(*mut XAudio27Callbacks)>,
+    OnProcessingPassEnd: Option<extern "C" fn(*mut XAudio27Callbacks)>,
+    OnCriticalError: Option<extern "C" fn(*mut XAudio27Callbacks, HRESULT)>,
+}
+
+#[repr(C)]
+struct XAudio27Callbacks {
+    vtable: *const XAudio27CallbacksVtable,
+}
+
+impl XAudio27Callbacks {
+    pub fn new() -> Self {
+        Self {
+            vtable: &XAUDIO27CALLBACKS_VTABLE,
+        }
+    }
+
+    extern "C" fn on_processing_pass_start(_this: *mut Self) {}
+    extern "C" fn on_processing_pass_end(_this: *mut Self) {}
+
+    extern "C" fn on_critical_error(_this: *mut Self, err: HRESULT) {
+        log(
+            LogType::Warning,
+            &format!(
+                "XAudio2.7 indicated a critical error: {} ({:08X})",
+                err.message(),
+                err.0
+            ),
+        );
+    }
+}
+
+static XAUDIO27CALLBACKS_VTABLE: XAudio27CallbacksVtable = XAudio27CallbacksVtable {
+    OnProcessingPassStart: Some(XAudio27Callbacks::on_processing_pass_start),
+    OnProcessingPassEnd: Some(XAudio27Callbacks::on_processing_pass_end),
+
+    OnCriticalError: Some(XAudio27Callbacks::on_critical_error),
+};
+
+/// Represents the VTable for XAudio 2.7's IXAudio2 object.
+///
+/// Do _NOT_ alter the ordering of these fields.
 #[repr(C)]
 #[allow(non_snake_case)]
 struct IXAudio27Vtable {
@@ -43,8 +85,9 @@ struct IXAudio27Vtable {
     GetDeviceDetails:
         Option<extern "C" fn(*mut IXAudio27, u32, *mut XAudio27DeviceDetails) -> HRESULT>,
     Initialize: Option<extern "C" fn(*mut IXAudio27, u32, u32) -> HRESULT>,
-    RegisterForCallbacks: Option<extern "C" fn(*mut IXAudio27, *mut c_void) -> HRESULT>,
-    UnregisterForCallbacks: Option<extern "C" fn(*mut IXAudio27, *mut c_void) -> HRESULT>,
+    RegisterForCallbacks: Option<extern "C" fn(*mut IXAudio27, *mut XAudio27Callbacks) -> HRESULT>,
+    UnregisterForCallbacks:
+        Option<extern "C" fn(*mut IXAudio27, *mut XAudio27Callbacks) -> HRESULT>,
 
     CreateSourceVoice: Option<
         extern "C" fn(*mut IXAudio27, *mut usize, usize, u32, f32, usize, usize, usize) -> HRESULT,
@@ -59,201 +102,62 @@ struct IXAudio27Vtable {
     StopEngine: Option<extern "C" fn(*mut IXAudio27) -> HRESULT>,
     CommitChanges: Option<extern "C" fn(*mut IXAudio27, u32) -> HRESULT>,
     GetPerformanceData: Option<extern "C" fn(*mut IXAudio27, usize) -> HRESULT>,
-    SetDebugConfiguration: Option<extern "C" fn(*mut IXAudio27, usize, usize) -> HRESULT>,
-}
-
-static XAUDIO27_VTABLE: IXAudio27Vtable = IXAudio27Vtable {
-    QueryInterface: None,
-    AddRef: None,
-    Release: None,
-    GetDeviceCount: Some(XAudio27_GetDeviceCount),
-    GetDeviceDetails: Some(XAudio27_GetDeviceDetails),
-    Initialize: None,
-    RegisterForCallbacks: None,
-    UnregisterForCallbacks: None,
-
-    CreateSourceVoice: Some(XAudio27_CreateSourceVoice),
-    CreateSubmixVoice: Some(XAudio27_CreateSubmixVoice),
-    CreateMasteringVoice: Some(XAudio27_CreateMasteringVoice),
-
-    StartEngine: None,
-    StopEngine: None,
-    CommitChanges: None,
-    GetPerformanceData: None,
-    SetDebugConfiguration: None,
-};
-
-extern "C" fn XAudio27_GetDeviceCount(_this: *mut IXAudio27, count: *mut u32) -> HRESULT {
-    unsafe {
-        *count = 1;
-    }
-
-    HRESULT::from_win32(0)
-}
-
-extern "C" fn XAudio27_GetDeviceDetails(
-    _this: *mut IXAudio27,
-    _idx: u32,
-    details_ptr: *mut XAudio27DeviceDetails,
-) -> HRESULT {
-    let display_name = widestring::WideCString::from_str("Virtual Audio Device").unwrap();
-
-    let details = {
-        let mut details = XAudio27DeviceDetails {
-            DeviceID: [WideChar::from(0u16); 256],
-            DisplayName: [WideChar::from(0u16); 256],
-            Role: 0xF, // GlobalDefaultDevice
-            OutputFormat: WAVEFORMATEXTENSIBLE {
-                Format: WAVEFORMATEX {
-                    wFormatTag: Multimedia::WAVE_FORMAT_PCM as u16,
-                    nChannels: 2,
-                    nSamplesPerSec: 44100,
-                    nAvgBytesPerSec: 65536,
-                    nBlockAlign: 4,
-                    wBitsPerSample: 16,
-                    cbSize: 0,
-                },
-
-                Samples: WAVEFORMATEXTENSIBLE_0 { wReserved: 0 },
-                dwChannelMask: 0x03,
-                SubFormat: Guid::new().unwrap(), // Hopefully they don't check this?
-            },
-        };
-
-        details.DisplayName[..display_name.len()].copy_from_slice(display_name.as_slice());
-        details
-    };
-
-    unsafe {
-        *details_ptr = details;
-    }
-
-    HRESULT::from_win32(0)
-}
-
-extern "C" fn XAudio27_CreateMasteringVoice(
-    this: *mut IXAudio27,
-    voice_out: *mut usize,
-    input_channels: u32,
-    input_sample_rate: u32,
-    flags: u32,
-    _device_index: u32,
-    effect_chain: usize,
-) -> HRESULT {
-    let this = unsafe { this.as_mut() }.unwrap();
-
-    match unsafe {
-        this.xaudio.CreateMasteringVoice(
-            std::mem::transmute(voice_out),
-            input_channels,
-            input_sample_rate,
-            flags,
-            None,
-            std::mem::transmute(effect_chain),
-            CoreAudio::AudioCategory_GameMedia,
-        )
-    } {
-        Ok(_) => HRESULT::from_win32(0),
-        Err(e) => e.code(),
-    }
-}
-
-extern "C" fn XAudio27_CreateSubmixVoice(
-    this: *mut IXAudio27,
-    voice_out: *mut usize,
-    input_channels: u32,
-    input_sample_rate: u32,
-    flags: u32,
-    processing_stage: u32,
-    send_list: usize,
-    effect_chain: usize,
-) -> HRESULT {
-    let this = unsafe { this.as_mut() }.unwrap();
-
-    match unsafe {
-        this.xaudio.CreateSubmixVoice(
-            std::mem::transmute(voice_out),
-            input_channels,
-            input_sample_rate,
-            flags,
-            processing_stage,
-            std::mem::transmute(send_list),
-            std::mem::transmute(effect_chain),
-        )
-    } {
-        Ok(_) => HRESULT::from_win32(0),
-        Err(e) => e.code(),
-    }
-}
-
-extern "C" fn XAudio27_CreateSourceVoice(
-    this: *mut IXAudio27,
-    voice_out: *mut usize,
-    format: usize,
-    flags: u32,
-    max_frequency_ratio: f32,
-    callback: usize,
-    send_list: usize,
-    effect_chain: usize,
-) -> HRESULT {
-    let this = unsafe { this.as_mut() }.unwrap();
-
-    match unsafe {
-        this.xaudio.CreateSourceVoice(
-            std::mem::transmute(voice_out),
-            std::mem::transmute(format),
-            flags,
-            max_frequency_ratio,
-            std::mem::transmute::<usize, XAudio2::IXAudio2VoiceCallback>(callback),
-            std::mem::transmute(send_list),
-            std::mem::transmute(effect_chain),
-        )
-    } {
-        Ok(_) => HRESULT::from_win32(0),
-        Err(e) => e.code(),
-    }
+    SetDebugConfiguration: Option<
+        extern "C" fn(
+            *mut IXAudio27,
+            *const XAudio2::XAUDIO2_DEBUG_CONFIGURATION,
+            usize,
+        ) -> HRESULT,
+    >,
 }
 
 #[repr(C)]
 struct IXAudio27 {
     vtable: *const IXAudio27Vtable,
-    xaudio: XAudio2::IXAudio2,
 }
 
+/// This function is invoked when the game calls `XAudio2Create`.
 fn xaudio2create_hook(xaudio2_out: *mut *mut IXAudio27, flags: u32, processor: u32) -> HRESULT {
-    let mut xaudio = None;
-    match unsafe {
-        XAudio2::XAudio2CreateWithVersionInfo(&mut xaudio, flags, processor, 0x0A000000)
-    } {
+    // Call the original `XAudio2Create`.
+    match unsafe { XAudio2CreateHook.call(xaudio2_out, flags, processor) }.ok() {
         Ok(_) => {}
         Err(e) => return e.code(),
     }
 
-    let xaudio = xaudio.unwrap();
+    // Grab a mutable reference to XAudio2 so we can call functions.
+    let xaudio2 = unsafe { (*xaudio2_out).as_mut() }.unwrap();
+
+    // Leak the callbacks, I guess...
+    let callbacks = Box::into_raw(Box::new(XAudio27Callbacks::new()));
+
+    // Register ourselves for XAudio2 callbacks.
+    unsafe {
+        (xaudio2.vtable.as_ref().unwrap())
+            .RegisterForCallbacks
+            .unwrap()(xaudio2, callbacks)
+        .unwrap();
+    }
+
     let config = XAudio2::XAUDIO2_DEBUG_CONFIGURATION {
         TraceMask: XAudio2::XAUDIO2_LOG_DETAIL
             | XAudio2::XAUDIO2_LOG_WARNINGS
             | XAudio2::XAUDIO2_LOG_API_CALLS,
-        BreakMask: XAudio2::XAUDIO2_LOG_ERRORS,
+        BreakMask: 0,
         LogThreadID: BOOL::from(false),
         LogFileline: BOOL::from(true),
         LogFunctionName: BOOL::from(true),
         LogTiming: BOOL::from(true),
     };
 
+    // Also, turn on XAudio2 debugging.
     unsafe {
-        xaudio.SetDebugConfiguration(&config, std::ptr::null_mut());
-        
-        *xaudio2_out = Box::into_raw(Box::new(IXAudio27 {
-            vtable: &XAUDIO27_VTABLE,
-            xaudio: xaudio,
-        }));
+        (xaudio2.vtable.as_ref().unwrap())
+            .SetDebugConfiguration
+            .unwrap()(xaudio2, &config, 0)
+        .unwrap();
     }
 
-    udk_log::log(
-        udk_log::LogType::Init,
-        "Hooked XAudio2Create and loaded XAudio 2.8.",
-    );
+    log(LogType::Init, "Hooked XAudio2Create and loaded XAudio 2.7");
     HRESULT::from_win32(0)
 }
 
