@@ -119,7 +119,7 @@ struct IXAudio27 {
 /// This function is invoked when the game calls `XAudio2Create`.
 fn xaudio2create_hook(xaudio2_out: *mut *mut IXAudio27, flags: u32, processor: u32) -> HRESULT {
     // Call the original `XAudio2Create`.
-    match unsafe { XAudio2CreateHook.call(xaudio2_out, flags, processor) }.ok() {
+    match XAudio2CreateHook.call(xaudio2_out, flags, processor).ok() {
         Ok(_) => {}
         Err(e) => return e.code(),
     }

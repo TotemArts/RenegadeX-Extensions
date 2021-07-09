@@ -1,0 +1,4 @@
+[target."i686-pc-windows-gnu"]
+image = "rustembedded/cross:i686-pc-windows-gnu"
+[target."x86_64-pc-windows-gnu"]
+image = "rustembedded/cross:x86_64-pc-windows-gnu"

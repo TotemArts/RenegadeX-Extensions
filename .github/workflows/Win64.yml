@@ -1,0 +1,29 @@
+name: Win64 CI
+
+on:
+  push:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+        
+    - run: rustup update --no-self-update && rustup +nightly target add x86_64-pc-windows-msvc
+
+    - name: build
+      run: cross +nightly build --target=x86_64-pc-windows-msvc --release
+
+    - name: Upload Win32 dinput8.dll
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        # Artifact name
+        name: dinput8.dll
+        # A file, directory or wildcard pattern that describes what to upload
+        path: target/x86_64-pc-windows-msvc/release/dinput8.dll

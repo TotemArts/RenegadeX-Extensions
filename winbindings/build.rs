@@ -1,15 +1,16 @@
 fn main() {
     windows::build! {
         Windows::Win32::{
-            Foundation::*,
+            Foundation::{BOOL, HANDLE, HINSTANCE},
             System::{
-                SystemServices::*,
-                LibraryLoader::*,
-                Threading::*,
-                ProcessStatus::*,
+                SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH},
+                LibraryLoader::GetModuleHandleA,
+                Threading::GetCurrentProcess,
+                ProcessStatus::{K32GetModuleInformation, MODULEINFO},
             },
-            Media::Audio::XAudio2::*,
-            Media::Multimedia::{WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVE_FORMAT_PCM},
-        }
+            Media::Audio::XAudio2::{XAUDIO2_DEBUG_CONFIGURATION, XAUDIO2_LOG_DETAIL, XAUDIO2_LOG_WARNINGS, XAUDIO2_LOG_API_CALLS},
+            Media::Multimedia::WAVEFORMATEXTENSIBLE,
+        },
+
     };
 }
