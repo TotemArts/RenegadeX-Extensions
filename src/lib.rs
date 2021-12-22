@@ -6,18 +6,19 @@ mod udk_log;
 mod udk_xaudio;
 
 const UDK_KNOWN_HASH: [u8; 32] = [
-    0x5a, 0xd9, 0xff, 0xb3, 0x34, 0x6e, 0xfa, 0xba, 0xf1, 0x05, 0x8d, 0x8c, 0x09, 0x7d, 0x30, 0x5c,
-    0xec, 0xaa, 0x55, 0x62, 0xf9, 0x28, 0x9d, 0x79, 0x91, 0x6d, 0x5f, 0xea, 0xa7, 0x6a, 0xed, 0x0a,
+    0x0D, 0xE6, 0x90, 0x31, 0xEA, 0x41, 0x01, 0xF2, 0x18, 0xB6, 0x61, 0x27, 0xFD, 0x14, 0x3A, 0x8E,
+    0xC3, 0xF7, 0x48, 0x3E, 0x31, 0x9C, 0x3D, 0x8D, 0xD5, 0x1F, 0xA2, 0x8D, 0x7C, 0xBF, 0x08, 0xF5,
 ];
 
 use sha2::{Digest, Sha256};
 
 use winbindings::{
     Windows::Win32::{
-        Foundation::{HANDLE, HINSTANCE},
+        Foundation::{HANDLE, HINSTANCE, PWSTR},
         System::{
+            Diagnostics::Debug::OutputDebugStringW,
             LibraryLoader::GetModuleHandleA,
-            ProcessStatus::{K32GetModuleInformation, MODULEINFO},
+            ProcessStatus::{K32GetModuleFileNameExW, K32GetModuleInformation, MODULEINFO},
             SystemServices::{
                 DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH,
             },
@@ -29,6 +30,8 @@ use winbindings::{
 
 /// Cached slice of UDK.exe. This is only touched once upon init, and
 /// never written again.
+// FIXME: The slice is actually unsafe to access; sections of memory may be unmapped!
+// We should use a raw pointer slice instead (if ergonomics permit doing so).
 static mut UDK_SLICE: Option<&'static [u8]> = None;
 
 /// Return a slice of UDK.exe
@@ -37,8 +40,33 @@ pub fn get_udk_slice() -> &'static [u8] {
     unsafe { UDK_SLICE.unwrap() }
 }
 
+/// Wrapped version of the Win32 OutputDebugString.
+fn output_debug_string(s: &str) {
+    unsafe {
+        OutputDebugStringW(s);
+    }
+}
+
+/// Wrapped version of the Win32 GetModuleFileName.
+fn get_module_filename(process: HANDLE, module: HINSTANCE) -> winbindings::Result<String> {
+    // Use a temporary buffer the size of MAX_PATH for now.
+    // TODO: Dynamic allocation for longer filenames. As of now, this will truncate longer filenames.
+    let mut buf = [0u16; 256];
+
+    let len = unsafe {
+        K32GetModuleFileNameExW(process, module, PWSTR(buf.as_mut_ptr()), buf.len() as u32)
+    } as usize;
+
+    if len == 0 {
+        // Function failed.
+        return Err(HRESULT::from_thread().into());
+    }
+
+    Ok(String::from_utf16_lossy(&buf[..len]))
+}
+
 /// Wrapped version of the Win32 GetModuleInformation.
-fn get_module_information(process: HANDLE, module: HINSTANCE) -> Result<MODULEINFO, HRESULT> {
+fn get_module_information(process: HANDLE, module: HINSTANCE) -> winbindings::Result<MODULEINFO> {
     let mut module_info = MODULEINFO {
         ..Default::default()
     };
@@ -53,43 +81,46 @@ fn get_module_information(process: HANDLE, module: HINSTANCE) -> Result<MODULEIN
         .as_bool()
     } {
         true => Ok(module_info),
-        false => Err(HRESULT::from_thread()),
+        false => Err(HRESULT::from_thread().into()),
     }
 }
 
-/// Get a (read-only) memory slice corresponding to the loaded EXE.
-fn get_process_slice() -> &'static [u8] {
-    let module = unsafe { GetModuleHandleA(None) };
-    match get_module_information(unsafe { GetCurrentProcess() }, module) {
-        Ok(mi) => unsafe {
-            std::slice::from_raw_parts(mi.lpBaseOfDll as *const u8, mi.SizeOfImage as usize)
-        },
-        Err(_) => panic!("Failed to get module information for UDK EXE"),
-    }
+/// Create a raw slice from a MODULEINFO structure.
+fn get_module_slice(info: &MODULEINFO) -> *const [u8] {
+    core::ptr::slice_from_raw_parts(info.lpBaseOfDll as *const u8, info.SizeOfImage as usize)
 }
 
 /// Called upon DLL attach. This function verifies the UDK and initializes
 /// hooks if the UDK matches our known hash.
 fn dll_attach() -> anyhow::Result<()> {
+    let process = unsafe { GetCurrentProcess() };
+    let module = unsafe { GetModuleHandleA(None) };
+
+    let exe_slice = get_module_slice(
+        &get_module_information(process, module).expect("Failed to get module information for UDK"),
+    );
+
     // Now that we're attached, let's hash the UDK executable.
     // If the hash does not match what we think it should be, do not attach detours.
-    let exe = get_process_slice();
+    let exe_filename = get_module_filename(process, module)?;
 
-    // Hash the first 256 bytes until we can figure out rw sections.
+    let mut exe = std::fs::File::open(exe_filename)?;
     let hash = {
         let mut sha = Sha256::new();
-        sha.update(&exe[..256]);
+        std::io::copy(&mut exe, &mut sha)?;
         sha.finalize()
     };
 
     // Ensure the hash matches a known hash.
     if hash[..] != UDK_KNOWN_HASH {
+        output_debug_string(&format!("Hash: {:02X?}\n", hash));
+        output_debug_string(&format!("Expected: {:02X?}\n", UDK_KNOWN_HASH));
         anyhow::bail!("Unknown UDK hash");
     }
 
     // Cache the UDK slice.
     unsafe {
-        UDK_SLICE = Some(exe);
+        UDK_SLICE = Some(exe_slice.as_ref().unwrap());
     }
 
     // Initialize detours.
