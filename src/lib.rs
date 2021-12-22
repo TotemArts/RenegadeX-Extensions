@@ -1,4 +1,4 @@
-#![feature(asm, naked_functions)]
+#![feature(naked_functions)]
 
 mod dinput8;
 
