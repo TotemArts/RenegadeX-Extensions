@@ -1,10 +1,7 @@
 //! This module contains functionality relevant to UDK logging.
 use crate::get_udk_slice;
 
-/// Offset from the beginning of UDK64.exe to the debug log object.
-const DEBUG_LOG_OFFSET: usize = 0x0355_1720;
-/// Address of UDK's log function.
-const DEBUG_FN_OFFSET: usize = 0x0024_6A20;
+use crate::udk_offsets::{DEBUG_LOG_OFFSET, DEBUG_FN_OFFSET};
 
 /// This is the type signature of UDK's log function.
 type UDKLogFn = unsafe extern "C" fn(usize, u32, *const widestring::WideChar);

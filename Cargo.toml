@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = "1.0.51"
 com = "0.6.0"
-detour = { git = "https://github.com/darfink/detour-rs.git" }
+detour = { git = "https://github.com/Hpmason/detour-rs", branch = "fix-nightly1.67.0-changes" }
 lazy_static = "1.4.0"
 libloading = "0.7.2"
 sha2 = "0.10.0"

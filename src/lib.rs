@@ -3,6 +3,7 @@
 mod dinput8;
 
 mod udk_log;
+mod udk_offsets;
 mod udk_xaudio;
 
 const UDK_KNOWN_HASH: [u8; 32] = [

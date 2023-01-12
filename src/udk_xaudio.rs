@@ -5,14 +5,11 @@ use widestring::WideChar;
 
 use crate::get_udk_slice;
 use crate::udk_log::{log, LogType};
+use crate::udk_offsets::UDK_XAUDIO2CREATE_OFFSET;
 
 use winbindings::Windows::Win32::Foundation::BOOL;
 use winbindings::Windows::Win32::Media::{Audio::XAudio2, Multimedia::WAVEFORMATEXTENSIBLE};
 use winbindings::HRESULT;
-
-// const UDK_INITHW_OFFSET: usize = 0x0171_1ED0;
-// const UDK_XAUDIO2_OFFSET: usize = 0x036C_90F8;
-const UDK_XAUDIO2CREATE_OFFSET: usize = 0x0170_F4D0;
 
 static_detour! {
     static XAudio2CreateHook: extern "C" fn(*mut *mut IXAudio27, u32, u32) -> HRESULT;
