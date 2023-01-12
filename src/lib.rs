@@ -11,22 +11,21 @@ const UDK_KNOWN_HASH: [u8; 32] = [
     0xC3, 0xF7, 0x48, 0x3E, 0x31, 0x9C, 0x3D, 0x8D, 0xD5, 0x1F, 0xA2, 0x8D, 0x7C, 0xBF, 0x08, 0xF5,
 ];
 
+use anyhow::Context;
 use sha2::{Digest, Sha256};
 
-use winbindings::{
-    Windows::Win32::{
-        Foundation::{HANDLE, HINSTANCE, PWSTR},
-        System::{
-            Diagnostics::Debug::OutputDebugStringW,
-            LibraryLoader::GetModuleHandleA,
-            ProcessStatus::{K32GetModuleFileNameExW, K32GetModuleInformation, MODULEINFO},
-            SystemServices::{
-                DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH,
-            },
-            Threading::GetCurrentProcess,
+use windows::core::PCWSTR;
+use windows::Win32::{
+    Foundation::{HANDLE, HINSTANCE},
+    System::{
+        Diagnostics::Debug::OutputDebugStringW,
+        LibraryLoader::GetModuleHandleA,
+        ProcessStatus::{K32GetModuleFileNameExW, K32GetModuleInformation, MODULEINFO},
+        SystemServices::{
+            DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH,
         },
+        Threading::GetCurrentProcess,
     },
-    HRESULT,
 };
 
 /// Cached slice of UDK.exe. This is only touched once upon init, and
@@ -43,31 +42,31 @@ pub fn get_udk_slice() -> &'static [u8] {
 
 /// Wrapped version of the Win32 OutputDebugString.
 fn output_debug_string(s: &str) {
+    let ws = widestring::WideCString::from_str(s).unwrap();
+
     unsafe {
-        OutputDebugStringW(s);
+        OutputDebugStringW(PCWSTR(ws.as_ptr()));
     }
 }
 
 /// Wrapped version of the Win32 GetModuleFileName.
-fn get_module_filename(process: HANDLE, module: HINSTANCE) -> winbindings::Result<String> {
+fn get_module_filename(process: HANDLE, module: HINSTANCE) -> windows::core::Result<String> {
     // Use a temporary buffer the size of MAX_PATH for now.
     // TODO: Dynamic allocation for longer filenames. As of now, this will truncate longer filenames.
     let mut buf = [0u16; 256];
 
-    let len = unsafe {
-        K32GetModuleFileNameExW(process, module, PWSTR(buf.as_mut_ptr()), buf.len() as u32)
-    } as usize;
+    let len = unsafe { K32GetModuleFileNameExW(process, module, &mut buf) } as usize;
 
     if len == 0 {
         // Function failed.
-        return Err(HRESULT::from_thread().into());
+        return Err(windows::core::Error::from_win32());
     }
 
     Ok(String::from_utf16_lossy(&buf[..len]))
 }
 
 /// Wrapped version of the Win32 GetModuleInformation.
-fn get_module_information(process: HANDLE, module: HINSTANCE) -> winbindings::Result<MODULEINFO> {
+fn get_module_information(process: HANDLE, module: HINSTANCE) -> windows::core::Result<MODULEINFO> {
     let mut module_info = MODULEINFO {
         ..Default::default()
     };
@@ -82,7 +81,7 @@ fn get_module_information(process: HANDLE, module: HINSTANCE) -> winbindings::Re
         .as_bool()
     } {
         true => Ok(module_info),
-        false => Err(HRESULT::from_thread().into()),
+        false => Err(windows::core::Error::from_win32()),
     }
 }
 
@@ -95,7 +94,7 @@ fn get_module_slice(info: &MODULEINFO) -> *const [u8] {
 /// hooks if the UDK matches our known hash.
 fn dll_attach() -> anyhow::Result<()> {
     let process = unsafe { GetCurrentProcess() };
-    let module = unsafe { GetModuleHandleA(None) };
+    let module = unsafe { GetModuleHandleA(None) }.context("failed to get module handle")?;
 
     let exe_slice = get_module_slice(
         &get_module_information(process, module).expect("Failed to get module information for UDK"),

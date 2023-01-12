@@ -3,9 +3,6 @@ name = "renxhook"
 version = "0.1.0"
 edition = "2018"
 
-[workspace]
-members = ["winbindings"]
-
 [lib]
 name = "dinput8"
 crate-type = ["cdylib"]
@@ -20,4 +17,19 @@ lazy_static = "1.4.0"
 libloading = "0.7.2"
 sha2 = "0.10.0"
 widestring = "0.5.1"
-winbindings = { path = "./winbindings" }
+
+[dependencies.windows]
+version = "0.43.0"
+features = [
+    "Data_Xml_Dom",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_SystemServices",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
+	"Win32_Media_Audio",
+	"Win32_Media_Audio_XAudio2",
+	"Win32_Media_Multimedia",
+]

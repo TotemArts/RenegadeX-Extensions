@@ -7,9 +7,9 @@ use crate::get_udk_slice;
 use crate::udk_log::{log, LogType};
 use crate::udk_offsets::UDK_XAUDIO2CREATE_OFFSET;
 
-use winbindings::Windows::Win32::Foundation::BOOL;
-use winbindings::Windows::Win32::Media::{Audio::XAudio2, Multimedia::WAVEFORMATEXTENSIBLE};
-use winbindings::HRESULT;
+use windows::core::HRESULT;
+use windows::Win32::Foundation::{BOOL, S_OK};
+use windows::Win32::Media::Audio::{XAudio2, WAVEFORMATEXTENSIBLE};
 
 static_detour! {
     static XAudio2CreateHook: extern "C" fn(*mut *mut IXAudio27, u32, u32) -> HRESULT;
@@ -17,11 +17,11 @@ static_detour! {
 
 #[repr(C)]
 #[allow(non_snake_case)]
-struct XAudio27DeviceDetails {
-    DeviceID: [WideChar; 256],
-    DisplayName: [WideChar; 256],
-    Role: u32,
-    OutputFormat: WAVEFORMATEXTENSIBLE,
+pub struct XAudio27DeviceDetails {
+    pub DeviceID: [WideChar; 256],
+    pub DisplayName: [WideChar; 256],
+    pub Role: u32,
+    pub OutputFormat: WAVEFORMATEXTENSIBLE,
 }
 
 /// Represents the VTable for XAudio 2.7's IXAudio2EngineCallback object.
@@ -29,15 +29,15 @@ struct XAudio27DeviceDetails {
 /// Do _NOT_ alter the ordering of these fields.
 #[repr(C)]
 #[allow(non_snake_case)]
-struct XAudio27CallbacksVtable {
-    OnProcessingPassStart: Option<extern "C" fn(*mut XAudio27Callbacks)>,
-    OnProcessingPassEnd: Option<extern "C" fn(*mut XAudio27Callbacks)>,
-    OnCriticalError: Option<extern "C" fn(*mut XAudio27Callbacks, HRESULT)>,
+pub struct IXAudio27CallbacksVtable {
+    pub OnProcessingPassStart: Option<extern "C" fn(*mut XAudio27Callbacks)>,
+    pub OnProcessingPassEnd: Option<extern "C" fn(*mut XAudio27Callbacks)>,
+    pub OnCriticalError: Option<extern "C" fn(*mut XAudio27Callbacks, HRESULT)>,
 }
 
 #[repr(C)]
-struct XAudio27Callbacks {
-    vtable: *const XAudio27CallbacksVtable,
+pub struct XAudio27Callbacks {
+    vtable: *const IXAudio27CallbacksVtable,
 }
 
 impl XAudio27Callbacks {
@@ -62,7 +62,7 @@ impl XAudio27Callbacks {
     }
 }
 
-static XAUDIO27CALLBACKS_VTABLE: XAudio27CallbacksVtable = XAudio27CallbacksVtable {
+static XAUDIO27CALLBACKS_VTABLE: IXAudio27CallbacksVtable = IXAudio27CallbacksVtable {
     OnProcessingPassStart: Some(XAudio27Callbacks::on_processing_pass_start),
     OnProcessingPassEnd: Some(XAudio27Callbacks::on_processing_pass_end),
 
@@ -111,6 +111,7 @@ struct IXAudio27Vtable {
 #[repr(C)]
 struct IXAudio27 {
     vtable: *const IXAudio27Vtable,
+    // C++ private fields...
 }
 
 /// This function is invoked when the game calls `XAudio2Create`.
@@ -155,7 +156,7 @@ fn xaudio2create_hook(xaudio2_out: *mut *mut IXAudio27, flags: u32, processor: u
     }
 
     log(LogType::Init, "Hooked XAudio2Create and loaded XAudio 2.7");
-    HRESULT::from_win32(0)
+    S_OK
 }
 
 pub fn init() -> anyhow::Result<()> {
