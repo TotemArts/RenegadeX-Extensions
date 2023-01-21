@@ -1029,19 +1029,20 @@ impl IXAudio27SubmixVoice_Impl for XAudio27SubmixVoiceWrapper {
 
     unsafe fn SetEffectParameters(
         &self,
-        effect_index: u32,
-        parameters: *const c_void,
-        parameters_len: u32,
-        operation_set: u32,
+        _effect_index: u32,
+        _parameters: *const c_void,
+        _parameters_len: u32,
+        _operation_set: u32,
     ) -> HRESULT {
-        todo_log!(
-            "SetEffectParameters({}, {:016X}, {}, {})",
-            effect_index,
-            (parameters as usize),
-            parameters_len,
-            operation_set
-        );
+        // todo_log!(
+        //     "SetEffectParameters({}, {:016X}, {}, {})",
+        //     effect_index,
+        //     (parameters as usize),
+        //     parameters_len,
+        //     operation_set
+        // );
 
+        // HACK: We don't yet support this, but the game hammers on this call.
         S_OK
     }
 
