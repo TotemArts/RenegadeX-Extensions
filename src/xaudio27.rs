@@ -16,14 +16,22 @@ use paste::paste;
 use std::ffi::c_void;
 use widestring::{WideCStr, WideChar};
 
+use crate::udk_log;
+
 fn debug_log(msg: std::fmt::Arguments) {
-    let msg = std::fmt::format(msg);
-    let wstr = widestring::U16CString::from_str(&msg).unwrap();
+    let mut msg = std::fmt::format(msg);
+
+    // Log to the UDK.
+    udk_log::log(udk_log::LogType::Init, &msg);
 
     // Only bother logging when debug assertions are on.
     #[cfg(debug_assertions)]
-    unsafe {
-        OutputDebugStringW(PCWSTR(wstr.as_ptr()))
+    {
+        // OutputDebugString does not append newlines.
+        msg.push('\n');
+        let wstr = widestring::U16CString::from_str(&msg).unwrap();
+
+        unsafe { OutputDebugStringW(PCWSTR(wstr.as_ptr())) }
     }
 }
 
@@ -38,50 +46,26 @@ fn wstr_array<const N: usize>(src: &WideCStr) -> [u16; N] {
 macro_rules! todo_log {
     () => {
         debug_log(std::format_args!(
-            "HOOK: unimplemented: {}:{}\n",
+            "HOOK: unimplemented: {}:{}",
             file!(),
             line!()
         ));
-
-        crate::udk_log::log(
-            crate::udk_log::LogType::Warning,
-            &format!("unimplemented: {}:{}", file!(), line!()),
-        )
     };
     ($fmt:expr) => {
         debug_log(std::format_args!(
-            concat!("HOOK: unimplemented: {}:{}: ", $fmt, "\n"),
+            concat!("HOOK: unimplemented: {}:{}: ", $fmt),
             file!(),
             line!(),
         ));
-
-        crate::udk_log::log(
-            crate::udk_log::LogType::Warning,
-            &format!(
-                concat!("HOOK: unimplemented: {}:{}: ", $fmt, "\n"),
-                file!(),
-                line!(),
-            ),
-        )
     };
 
     ($fmt:expr, $($args:tt),*) => {
         debug_log(std::format_args!(
-            concat!("HOOK: unimplemented: {}:{}: ", $fmt, "\n"),
+            concat!("HOOK: unimplemented: {}:{}: ", $fmt),
             file!(),
             line!(),
             $($args),*
         ));
-
-        crate::udk_log::log(
-            crate::udk_log::LogType::Warning,
-            &format!(
-                concat!("HOOK: unimplemented: {}:{}: ", $fmt, "\n"),
-                file!(),
-                line!(),
-                $($args),*
-            ),
-        )
     };
 }
 
@@ -703,16 +687,16 @@ impl IXAudio27_Impl for XAudio27Wrapper {
         max_frequency_ratio: f32,
         callback: *const (),
         send_list: *const XAudio27VoiceSends,
-        effect_chain: *const XAudio27EffectChain,
+        _effect_chain: *const XAudio27EffectChain,
     ) -> HRESULT {
-        todo_log!(
-            "CreateSourceVoice({:08X}, {}, {:016X}, {:016X}, {:016X})",
-            flags,
-            max_frequency_ratio,
-            (callback as usize),
-            (send_list as usize),
-            (effect_chain as usize)
-        );
+        // todo_log!(
+        //     "CreateSourceVoice({:08X}, {}, {:016X}, {:016X}, {:016X})",
+        //     flags,
+        //     max_frequency_ratio,
+        //     (callback as usize),
+        //     (send_list as usize),
+        //     (effect_chain as usize)
+        // );
 
         let f = || -> windows::core::Result<()> {
             let send_list = translate_send_list(send_list);
@@ -735,7 +719,6 @@ impl IXAudio27_Impl for XAudio27Wrapper {
             let source_voice: IXAudio27SourceVoice =
                 XAudio27SourceVoiceWrapper(voice_out.unwrap()).into();
 
-            todo_log!(" -> {:016X}", (source_voice.0.as_ptr() as usize));
             source_voice_out.write(source_voice);
             Ok(())
         };
@@ -754,17 +737,17 @@ impl IXAudio27_Impl for XAudio27Wrapper {
         flags: u32,
         processing_stage: u32,
         send_list: *const XAudio27VoiceSends,
-        effect_chain: *const XAudio27EffectChain,
+        _effect_chain: *const XAudio27EffectChain,
     ) -> HRESULT {
-        todo_log!(
-            "CreateSubmixVoice({}, {}, {:08X}, {}, {:016X}, {:016X})",
-            input_channels,
-            input_sample_rate,
-            flags,
-            processing_stage,
-            (send_list as usize),
-            (effect_chain as usize)
-        );
+        // todo_log!(
+        //     "CreateSubmixVoice({}, {}, {:08X}, {}, {:016X}, {:016X})",
+        //     input_channels,
+        //     input_sample_rate,
+        //     flags,
+        //     processing_stage,
+        //     (send_list as usize),
+        //     (effect_chain as usize)
+        // );
 
         let f = || -> windows::core::Result<()> {
             let send_list = translate_send_list(send_list);
@@ -787,7 +770,6 @@ impl IXAudio27_Impl for XAudio27Wrapper {
             let submix_voice: IXAudio27SubmixVoice =
                 XAudio27SubmixVoiceWrapper(voice_out.unwrap()).into();
 
-            todo_log!(" -> {:016X}", (submix_voice.0.as_ptr() as usize));
             submix_voice_out.write(submix_voice);
             Ok(())
         };
@@ -804,17 +786,17 @@ impl IXAudio27_Impl for XAudio27Wrapper {
         input_channels: u32,
         input_sample_rate: u32,
         flags: u32,
-        device_index: u32,
-        effect_chain: *const XAudio27EffectChain,
+        _device_index: u32,
+        _effect_chain: *const XAudio27EffectChain,
     ) -> HRESULT {
-        todo_log!(
-            "CreateMasteringVoice({}, {}, {}, {}, {:016X})",
-            input_channels,
-            input_sample_rate,
-            flags,
-            device_index,
-            (effect_chain as usize)
-        );
+        // todo_log!(
+        //     "CreateMasteringVoice({}, {}, {}, {}, {:016X})",
+        //     input_channels,
+        //     input_sample_rate,
+        //     flags,
+        //     device_index,
+        //     (effect_chain as usize)
+        // );
 
         let f = || -> windows::core::Result<()> {
             let mut voice_out = None;
@@ -831,7 +813,6 @@ impl IXAudio27_Impl for XAudio27Wrapper {
             let mastering_voice: IXAudio27MasteringVoice =
                 XAudio27MasteringVoiceWrapper(voice_out.unwrap()).into();
 
-            todo_log!(" -> {:016X}", (mastering_voice.0.as_ptr() as usize));
             mastering_voice_out.write(mastering_voice);
             Ok(())
         };
@@ -882,8 +863,6 @@ impl IXAudio27MasteringVoice_Impl for XAudio27MasteringVoiceWrapper {
     }
 
     unsafe fn SetOutputVoices(&self, _send_list: *mut XAudio27VoiceSends) -> HRESULT {
-        todo_log!();
-
         // Invalid for mastering voices.
         E_FAIL
     }
