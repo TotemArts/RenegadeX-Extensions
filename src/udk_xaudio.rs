@@ -41,8 +41,8 @@ pub fn init() -> anyhow::Result<()> {
                 xaudio2create_hook,
             )
             .context("Failed to setup InitializeHardware hook")?;
-
-        XAudio2CreateHook.enable()?;
+        // Comment this out so we can fix the release version of renx temporarily
+        // XAudio2CreateHook.enable()?;
     }
 
     Ok(())
