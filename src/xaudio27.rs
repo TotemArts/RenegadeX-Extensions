@@ -3,8 +3,8 @@ use windows::Win32::Foundation::{E_FAIL, S_OK};
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2SubmixVoice, IXAudio2Voice,
     XAUDIO2_BUFFER, XAUDIO2_BUFFER_WMA, XAUDIO2_DEBUG_CONFIGURATION, XAUDIO2_DEFAULT_PROCESSOR,
-    XAUDIO2_FILTER_PARAMETERS, XAUDIO2_LOG_ERRORS, XAUDIO2_LOG_WARNINGS, XAUDIO2_SEND_DESCRIPTOR,
-    XAUDIO2_VOICE_SENDS, XAUDIO2_VOICE_STATE,
+    XAUDIO2_EFFECT_CHAIN, XAUDIO2_EFFECT_DESCRIPTOR, XAUDIO2_FILTER_PARAMETERS, XAUDIO2_LOG_ERRORS,
+    XAUDIO2_LOG_WARNINGS, XAUDIO2_SEND_DESCRIPTOR, XAUDIO2_VOICE_SENDS, XAUDIO2_VOICE_STATE,
 };
 use windows::Win32::Media::Audio::{
     AudioCategory_GameMedia, XAudio2, WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVE_FORMAT_PCM,
@@ -37,6 +37,8 @@ fn debug_log(msg: std::fmt::Arguments) {
 
 /// Initialize a wide string u16 array from a buffer
 fn wstr_array<const N: usize>(src: &WideCStr) -> [u16; N] {
+    assert!(src.len() < N);
+
     let mut a: [u16; N] = [0u16; N];
     a[..src.len()].copy_from_slice(src.as_slice());
 
@@ -194,21 +196,6 @@ pub struct XAudio27VoiceSends {
     pSends: *mut XAudio27SendDescriptor, // Array of SendCount send descriptors.
 }
 
-/// Used in XAUDIO2_EFFECT_CHAIN below
-#[repr(C, packed)]
-pub struct XAudio27EffectDescriptor {
-    pEffect: IUnknown,   // Pointer to the effect object's IUnknown interface.
-    InitialState: bool,  // TRUE if the effect should begin in the enabled state.
-    OutputChannels: u32, // How many output channels the effect should produce.
-}
-
-/// Used in the voice creation functions and in IXAudio2Voice::SetEffectChain
-#[repr(C, packed)]
-pub struct XAudio27EffectChain {
-    EffectCount: u32, // Number of effects in this voice's effect chain.
-    pEffectDescriptors: *mut XAudio27EffectDescriptor, // Array of effect descriptors.
-}
-
 #[interface]
 pub unsafe trait IXAudio27Callbacks {
     fn OnProcessingPassStart(&self);
@@ -220,7 +207,7 @@ pub unsafe trait IXAudio27Callbacks {
 pub unsafe trait IXAudio27Voice {
     fn GetVoiceDetails(&self, details_out: *mut XAudio27VoiceDetails);
     fn SetOutputVoices(&self, send_list: *mut XAudio27VoiceSends) -> HRESULT;
-    fn SetEffectChain(&self, effect_chain: *const XAudio27EffectChain) -> HRESULT;
+    fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT;
     fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn GetEffectState(&self, effect_index: u32, enabled_out: *mut bool);
@@ -282,7 +269,7 @@ pub unsafe trait IXAudio27MasteringVoice {
     // IXAudio27Voice {
     fn GetVoiceDetails(&self, details_out: *mut XAudio27VoiceDetails);
     fn SetOutputVoices(&self, send_list: *mut XAudio27VoiceSends) -> HRESULT;
-    fn SetEffectChain(&self, effect_chain: *const XAudio27EffectChain) -> HRESULT;
+    fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT;
     fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn GetEffectState(&self, effect_index: u32, enabled_out: *mut bool);
@@ -346,7 +333,7 @@ pub unsafe trait IXAudio27SubmixVoice {
     // IXAudio27Voice {
     fn GetVoiceDetails(&self, details_out: *mut XAudio27VoiceDetails);
     fn SetOutputVoices(&self, send_list: *mut XAudio27VoiceSends) -> HRESULT;
-    fn SetEffectChain(&self, effect_chain: *const XAudio27EffectChain) -> HRESULT;
+    fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT;
     fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn GetEffectState(&self, effect_index: u32, enabled_out: *mut bool);
@@ -410,7 +397,7 @@ pub unsafe trait IXAudio27SourceVoice {
     // IXAudio27Voice {
     fn GetVoiceDetails(&self, details_out: *mut XAudio27VoiceDetails);
     fn SetOutputVoices(&self, send_list: *mut XAudio27VoiceSends) -> HRESULT;
-    fn SetEffectChain(&self, effect_chain: *const XAudio27EffectChain) -> HRESULT;
+    fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT;
     fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn GetEffectState(&self, effect_index: u32, enabled_out: *mut bool);
@@ -500,7 +487,7 @@ pub unsafe trait IXAudio27: IUnknown {
         max_frequency_ratio: f32,
         callback: *const (),
         send_list: *const XAudio27VoiceSends,
-        effect_chain: *const XAudio27EffectChain,
+        effect_chain: *const XAUDIO2_EFFECT_CHAIN,
     ) -> HRESULT;
     fn CreateSubmixVoice(
         &self,
@@ -510,7 +497,7 @@ pub unsafe trait IXAudio27: IUnknown {
         flags: u32,
         processing_stage: u32,
         send_list: *const XAudio27VoiceSends,
-        effect_chain: *const XAudio27EffectChain,
+        effect_chain: *const XAUDIO2_EFFECT_CHAIN,
     ) -> HRESULT;
     fn CreateMasteringVoice(
         &self,
@@ -519,7 +506,7 @@ pub unsafe trait IXAudio27: IUnknown {
         input_sample_rate: u32,
         flags: u32,
         device_index: u32,
-        effect_chain: *const XAudio27EffectChain,
+        effect_chain: *const XAUDIO2_EFFECT_CHAIN,
     ) -> HRESULT;
     fn StartEngine(&self) -> HRESULT;
     fn StopEngine(&self);
@@ -687,7 +674,7 @@ impl IXAudio27_Impl for XAudio27Wrapper {
         max_frequency_ratio: f32,
         callback: *const (),
         send_list: *const XAudio27VoiceSends,
-        _effect_chain: *const XAudio27EffectChain,
+        effect_chain: *const XAUDIO2_EFFECT_CHAIN,
     ) -> HRESULT {
         // todo_log!(
         //     "CreateSourceVoice({:08X}, {}, {:016X}, {:016X}, {:016X})",
@@ -713,7 +700,7 @@ impl IXAudio27_Impl for XAudio27Wrapper {
                 max_frequency_ratio,
                 (!callback.is_null()).then_some(std::mem::transmute(&callback)), // SAFETY: The interface is compatible between 2.7 and 2.9.
                 sends.as_ref().map(|x| x as *const _),
-                None, // TODO
+                (!effect_chain.is_null()).then_some(effect_chain), // SAFETY: The interface is compatible between 2.7 and 2.9.
             )?;
 
             let source_voice: IXAudio27SourceVoice =
@@ -737,7 +724,7 @@ impl IXAudio27_Impl for XAudio27Wrapper {
         flags: u32,
         processing_stage: u32,
         send_list: *const XAudio27VoiceSends,
-        _effect_chain: *const XAudio27EffectChain,
+        effect_chain: *const XAUDIO2_EFFECT_CHAIN,
     ) -> HRESULT {
         // todo_log!(
         //     "CreateSubmixVoice({}, {}, {:08X}, {}, {:016X}, {:016X})",
@@ -764,7 +751,7 @@ impl IXAudio27_Impl for XAudio27Wrapper {
                 flags,
                 processing_stage,
                 sends.as_ref().map(|x| x as *const _),
-                None, // TODO
+                (!effect_chain.is_null()).then_some(effect_chain), // SAFETY: The interface is compatible between 2.7 and 2.9.
             )?;
 
             let submix_voice: IXAudio27SubmixVoice =
@@ -787,7 +774,7 @@ impl IXAudio27_Impl for XAudio27Wrapper {
         input_sample_rate: u32,
         flags: u32,
         _device_index: u32,
-        _effect_chain: *const XAudio27EffectChain,
+        effect_chain: *const XAUDIO2_EFFECT_CHAIN,
     ) -> HRESULT {
         // todo_log!(
         //     "CreateMasteringVoice({}, {}, {}, {}, {:016X})",
@@ -806,7 +793,7 @@ impl IXAudio27_Impl for XAudio27Wrapper {
                 input_sample_rate,
                 flags,
                 None, // TODO
-                None, // TODO
+                (!effect_chain.is_null()).then_some(effect_chain), // SAFETY: The interface is compatible between 2.7 and 2.9.
                 AudioCategory_GameMedia,
             )?;
 
@@ -867,7 +854,7 @@ impl IXAudio27MasteringVoice_Impl for XAudio27MasteringVoiceWrapper {
         E_FAIL
     }
 
-    unsafe fn SetEffectChain(&self, _effect_chain: *const XAudio27EffectChain) -> HRESULT {
+    unsafe fn SetEffectChain(&self, _effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
         todo_log!();
         E_FAIL
     }
@@ -1008,7 +995,7 @@ impl IXAudio27SubmixVoice_Impl for XAudio27SubmixVoiceWrapper {
         E_FAIL
     }
 
-    unsafe fn SetEffectChain(&self, _effect_chain: *const XAudio27EffectChain) -> HRESULT {
+    unsafe fn SetEffectChain(&self, _effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
         todo_log!();
         E_FAIL
     }
@@ -1171,7 +1158,7 @@ impl IXAudio27SourceVoice_Impl for XAudio27SourceVoiceWrapper {
         E_FAIL
     }
 
-    unsafe fn SetEffectChain(&self, _effect_chain: *const XAudio27EffectChain) -> HRESULT {
+    unsafe fn SetEffectChain(&self, _effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
         todo_log!();
         E_FAIL
     }
