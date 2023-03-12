@@ -1,15 +1,14 @@
-use windows::core::{implement, interface, IUnknown, IUnknown_Vtbl, GUID, HRESULT, PCWSTR};
+use windows::core::{implement, interface, IUnknown, IUnknown_Vtbl, GUID, HRESULT};
 use windows::Win32::Foundation::{E_FAIL, S_OK};
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2SubmixVoice, IXAudio2Voice,
     XAUDIO2_BUFFER, XAUDIO2_BUFFER_WMA, XAUDIO2_DEBUG_CONFIGURATION, XAUDIO2_DEFAULT_PROCESSOR,
-    XAUDIO2_EFFECT_CHAIN, XAUDIO2_EFFECT_DESCRIPTOR, XAUDIO2_FILTER_PARAMETERS, XAUDIO2_LOG_ERRORS,
-    XAUDIO2_LOG_WARNINGS, XAUDIO2_SEND_DESCRIPTOR, XAUDIO2_VOICE_SENDS, XAUDIO2_VOICE_STATE,
+    XAUDIO2_EFFECT_CHAIN, XAUDIO2_FILTER_PARAMETERS, XAUDIO2_LOG_ERRORS, XAUDIO2_LOG_WARNINGS,
+    XAUDIO2_SEND_DESCRIPTOR, XAUDIO2_VOICE_SENDS, XAUDIO2_VOICE_STATE,
 };
 use windows::Win32::Media::Audio::{
     AudioCategory_GameMedia, XAudio2, WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVE_FORMAT_PCM,
 };
-use windows::Win32::System::Diagnostics::Debug::OutputDebugStringW;
 use windows::Win32::System::SystemInformation::NTDDI_WIN10;
 
 use paste::paste;
@@ -19,7 +18,7 @@ use widestring::{WideCStr, WideChar};
 use crate::udk_log;
 
 fn debug_log(msg: std::fmt::Arguments) {
-    let mut msg = std::fmt::format(msg);
+    let msg = std::fmt::format(msg);
 
     // Log to the UDK.
     udk_log::log(udk_log::LogType::Init, &msg);
@@ -27,8 +26,11 @@ fn debug_log(msg: std::fmt::Arguments) {
     // Only bother logging when debug assertions are on.
     #[cfg(debug_assertions)]
     {
+        use windows::core::PCSWSTR;
+        use windows::Win32::System::Diagnostics::Debug::OutputDebugStringW;
+
         // OutputDebugString does not append newlines.
-        msg.push('\n');
+        let msg = format!("{msg}\n");
         let wstr = widestring::U16CString::from_str(&msg).unwrap();
 
         unsafe { OutputDebugStringW(PCWSTR(wstr.as_ptr())) }
@@ -792,7 +794,7 @@ impl IXAudio27_Impl for XAudio27Wrapper {
                 input_channels,
                 input_sample_rate,
                 flags,
-                None, // TODO
+                None,                                              // TODO
                 (!effect_chain.is_null()).then_some(effect_chain), // SAFETY: The interface is compatible between 2.7 and 2.9.
                 AudioCategory_GameMedia,
             )?;
@@ -875,23 +877,27 @@ impl IXAudio27MasteringVoice_Impl for XAudio27MasteringVoiceWrapper {
 
     unsafe fn SetEffectParameters(
         &self,
-        _effect_index: u32,
-        _parameters: *const c_void,
-        _parameters_len: u32,
-        _operation_set: u32,
+        effect_index: u32,
+        parameters: *const c_void,
+        parameters_len: u32,
+        operation_set: u32,
     ) -> HRESULT {
-        todo_log!();
-        E_FAIL
+        // NOTE: The parameters are identical between XAudio 2.7 and 2.9, so we can simply forward the call.
+        self.0
+            .SetEffectParameters(effect_index, parameters, parameters_len, operation_set)
+            .into()
     }
 
     unsafe fn GetEffectParameters(
         &self,
-        _effect_index: u32,
-        _parameters_out: *mut c_void,
-        _parameters_len: u32,
+        effect_index: u32,
+        parameters_out: *mut c_void,
+        parameters_len: u32,
     ) -> HRESULT {
-        todo_log!();
-        E_FAIL
+        // NOTE: The parameters are identical between XAudio 2.7 and 2.9, so we can simply forward the call.
+        self.0
+            .GetEffectParameters(effect_index, parameters_out, parameters_len)
+            .into()
     }
 
     unsafe fn SetFilterParameters(
@@ -1016,31 +1022,27 @@ impl IXAudio27SubmixVoice_Impl for XAudio27SubmixVoiceWrapper {
 
     unsafe fn SetEffectParameters(
         &self,
-        _effect_index: u32,
-        _parameters: *const c_void,
-        _parameters_len: u32,
-        _operation_set: u32,
+        effect_index: u32,
+        parameters: *const c_void,
+        parameters_len: u32,
+        operation_set: u32,
     ) -> HRESULT {
-        // todo_log!(
-        //     "SetEffectParameters({}, {:016X}, {}, {})",
-        //     effect_index,
-        //     (parameters as usize),
-        //     parameters_len,
-        //     operation_set
-        // );
-
-        // HACK: We don't yet support this, but the game hammers on this call.
-        S_OK
+        // NOTE: The parameters are identical between XAudio 2.7 and 2.9, so we can simply forward the call.
+        self.0
+            .SetEffectParameters(effect_index, parameters, parameters_len, operation_set)
+            .into()
     }
 
     unsafe fn GetEffectParameters(
         &self,
-        _effect_index: u32,
-        _parameters_out: *mut c_void,
-        _parameters_len: u32,
+        effect_index: u32,
+        parameters_out: *mut c_void,
+        parameters_len: u32,
     ) -> HRESULT {
-        todo_log!();
-        E_FAIL
+        // NOTE: The parameters are identical between XAudio 2.7 and 2.9, so we can simply forward the call.
+        self.0
+            .GetEffectParameters(effect_index, parameters_out, parameters_len)
+            .into()
     }
 
     unsafe fn SetFilterParameters(
@@ -1179,23 +1181,27 @@ impl IXAudio27SourceVoice_Impl for XAudio27SourceVoiceWrapper {
 
     unsafe fn SetEffectParameters(
         &self,
-        _effect_index: u32,
-        _parameters: *const c_void,
-        _parameters_len: u32,
-        _operation_set: u32,
+        effect_index: u32,
+        parameters: *const c_void,
+        parameters_len: u32,
+        operation_set: u32,
     ) -> HRESULT {
-        todo_log!();
-        E_FAIL
+        // NOTE: The parameters are identical between XAudio 2.7 and 2.9, so we can simply forward the call.
+        self.0
+            .SetEffectParameters(effect_index, parameters, parameters_len, operation_set)
+            .into()
     }
 
     unsafe fn GetEffectParameters(
         &self,
-        _effect_index: u32,
-        _parameters_out: *mut c_void,
-        _parameters_len: u32,
+        effect_index: u32,
+        parameters_out: *mut c_void,
+        parameters_len: u32,
     ) -> HRESULT {
-        todo_log!();
-        E_FAIL
+        // NOTE: The parameters are identical between XAudio 2.7 and 2.9, so we can simply forward the call.
+        self.0
+            .GetEffectParameters(effect_index, parameters_out, parameters_len)
+            .into()
     }
 
     unsafe fn SetFilterParameters(
