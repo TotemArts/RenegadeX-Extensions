@@ -1,5 +1,5 @@
 use windows::core::{implement, interface, IUnknown, IUnknown_Vtbl, GUID, HRESULT};
-use windows::Win32::Foundation::{E_FAIL, S_OK};
+use windows::Win32::Foundation::{BOOL, E_FAIL, S_OK};
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2SubmixVoice, IXAudio2Voice,
     XAUDIO2_BUFFER, XAUDIO2_BUFFER_WMA, XAUDIO2_DEBUG_CONFIGURATION, XAUDIO2_DEFAULT_PROCESSOR,
@@ -212,7 +212,7 @@ pub unsafe trait IXAudio27Voice {
     fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT;
     fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
-    fn GetEffectState(&self, effect_index: u32, enabled_out: *mut bool);
+    fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL);
     fn SetEffectParameters(
         &self,
         effect_index: u32,
@@ -274,7 +274,7 @@ pub unsafe trait IXAudio27MasteringVoice {
     fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT;
     fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
-    fn GetEffectState(&self, effect_index: u32, enabled_out: *mut bool);
+    fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL);
     fn SetEffectParameters(
         &self,
         effect_index: u32,
@@ -338,7 +338,7 @@ pub unsafe trait IXAudio27SubmixVoice {
     fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT;
     fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
-    fn GetEffectState(&self, effect_index: u32, enabled_out: *mut bool);
+    fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL);
     fn SetEffectParameters(
         &self,
         effect_index: u32,
@@ -402,7 +402,7 @@ pub unsafe trait IXAudio27SourceVoice {
     fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT;
     fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
     fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT;
-    fn GetEffectState(&self, effect_index: u32, enabled_out: *mut bool);
+    fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL);
     fn SetEffectParameters(
         &self,
         effect_index: u32,
@@ -856,23 +856,23 @@ impl IXAudio27MasteringVoice_Impl for XAudio27MasteringVoiceWrapper {
         E_FAIL
     }
 
-    unsafe fn SetEffectChain(&self, _effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
+        // SAFETY: The interface is compatible between 2.7 and 2.9.
+        self.0
+            .SetEffectChain((!effect_chain.is_null()).then_some(effect_chain))
+            .into()
     }
 
-    unsafe fn EnableEffect(&self, _effect_index: u32, _operation_set: u32) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT {
+        self.0.EnableEffect(effect_index, operation_set).into()
     }
 
-    unsafe fn DisableEffect(&self, _effect_index: u32, _operation_set: u32) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT {
+        self.0.DisableEffect(effect_index, operation_set).into()
     }
 
-    unsafe fn GetEffectState(&self, _effect_index: u32, _enabled_out: *mut bool) {
-        todo_log!();
+    unsafe fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL) {
+        self.0.GetEffectState(effect_index, enabled_out).into()
     }
 
     unsafe fn SetEffectParameters(
@@ -1001,23 +1001,23 @@ impl IXAudio27SubmixVoice_Impl for XAudio27SubmixVoiceWrapper {
         E_FAIL
     }
 
-    unsafe fn SetEffectChain(&self, _effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
+        // SAFETY: The interface is compatible between 2.7 and 2.9.
+        self.0
+            .SetEffectChain((!effect_chain.is_null()).then_some(effect_chain))
+            .into()
     }
 
-    unsafe fn EnableEffect(&self, _effect_index: u32, _operation_set: u32) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT {
+        self.0.EnableEffect(effect_index, operation_set).into()
     }
 
-    unsafe fn DisableEffect(&self, _effect_index: u32, _operation_set: u32) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT {
+        self.0.DisableEffect(effect_index, operation_set).into()
     }
 
-    unsafe fn GetEffectState(&self, _effect_index: u32, _enabled_out: *mut bool) {
-        todo_log!();
+    unsafe fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL) {
+        self.0.GetEffectState(effect_index, enabled_out).into()
     }
 
     unsafe fn SetEffectParameters(
@@ -1160,23 +1160,23 @@ impl IXAudio27SourceVoice_Impl for XAudio27SourceVoiceWrapper {
         E_FAIL
     }
 
-    unsafe fn SetEffectChain(&self, _effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn SetEffectChain(&self, effect_chain: *const XAUDIO2_EFFECT_CHAIN) -> HRESULT {
+        // SAFETY: The interface is compatible between 2.7 and 2.9.
+        self.0
+            .SetEffectChain((!effect_chain.is_null()).then_some(effect_chain))
+            .into()
     }
 
-    unsafe fn EnableEffect(&self, _effect_index: u32, _operation_set: u32) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn EnableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT {
+        self.0.EnableEffect(effect_index, operation_set).into()
     }
 
-    unsafe fn DisableEffect(&self, _effect_index: u32, _operation_set: u32) -> HRESULT {
-        todo_log!();
-        E_FAIL
+    unsafe fn DisableEffect(&self, effect_index: u32, operation_set: u32) -> HRESULT {
+        self.0.DisableEffect(effect_index, operation_set).into()
     }
 
-    unsafe fn GetEffectState(&self, _effect_index: u32, _enabled_out: *mut bool) {
-        todo_log!();
+    unsafe fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL) {
+        self.0.GetEffectState(effect_index, enabled_out).into()
     }
 
     unsafe fn SetEffectParameters(
