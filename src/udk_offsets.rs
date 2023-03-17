@@ -10,3 +10,4 @@ pub const DEBUG_FN_OFFSET: usize = 0x0024_6A20;
 // pub const UDK_INITHW_OFFSET: usize = 0x0171_1ED0;
 // pub const UDK_XAUDIO2_OFFSET: usize = 0x036C_90F8;
 pub const UDK_XAUDIO2CREATE_OFFSET: usize = 0x0170_F4D0;
+pub const UDK_CREATEFX_PTR_OFFSET: usize = 0x024B_E8B0;
