@@ -26,7 +26,7 @@ fn debug_log(msg: std::fmt::Arguments) {
     // Only bother logging when debug assertions are on.
     #[cfg(debug_assertions)]
     {
-        use windows::core::PCSWSTR;
+        use windows::core::PCWSTR;
         use windows::Win32::System::Diagnostics::Debug::OutputDebugStringW;
 
         // OutputDebugString does not append newlines.

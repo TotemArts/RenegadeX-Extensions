@@ -16,6 +16,7 @@ use anyhow::Context;
 use sha2::{Digest, Sha256};
 
 use windows::core::PCWSTR;
+use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 use windows::Win32::{
     Foundation::{HANDLE, HINSTANCE},
     System::{
@@ -94,6 +95,9 @@ fn get_module_slice(info: &MODULEINFO) -> *const [u8] {
 /// Called upon DLL attach. This function verifies the UDK and initializes
 /// hooks if the UDK matches our known hash.
 fn dll_attach() -> anyhow::Result<()> {
+    // Ensure that COM is initialized.
+    unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.context("failed to initialize COM")?;
+
     let process = unsafe { GetCurrentProcess() };
     let module = unsafe { GetModuleHandleA(None) }.context("failed to get module handle")?;
 
@@ -140,6 +144,7 @@ pub extern "stdcall" fn DllMain(
         DLL_PROCESS_ATTACH => {
             if let Err(e) = dll_attach() {
                 // Print a debug message for anyone who's listening.
+                output_debug_string(&format!("{:?}\n", e));
                 eprintln!("{:?}", e);
             }
         }

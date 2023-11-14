@@ -26,6 +26,7 @@ features = [
 	"interface",
 	"implement",
     "Data_Xml_Dom",
+    "Win32_Devices_HumanInterfaceDevice",
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_Com",
