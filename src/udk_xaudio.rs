@@ -1,6 +1,6 @@
 //! This module contains functionality related to UDK XAudio hooks.
 use anyhow::Context;
-use detour::static_detour;
+use retour::static_detour;
 
 use crate::get_udk_slice;
 use crate::udk_log::{log, LogType};

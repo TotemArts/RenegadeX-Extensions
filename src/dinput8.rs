@@ -1,6 +1,6 @@
 //! This module handles functionality related to the original dinput8.dll
 use windows::{
-    core::{IUnknown, Interface, GUID, HRESULT},
+    core::{IUnknown, ComInterface, GUID, HRESULT},
     Win32::{
         Devices::HumanInterfaceDevice::{CLSID_DirectInput8, IDirectInput8A, IDirectInput8W},
         Foundation::{E_NOINTERFACE, HINSTANCE, S_OK},

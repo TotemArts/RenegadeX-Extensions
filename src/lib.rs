@@ -109,12 +109,12 @@ fn dll_attach() -> anyhow::Result<()> {
     let module = unsafe { GetModuleHandleA(None) }.context("failed to get module handle")?;
 
     let exe_slice = get_module_slice(
-        &get_module_information(process, module).expect("Failed to get module information for UDK"),
+        &get_module_information(process, module.into()).expect("Failed to get module information for UDK"),
     );
 
     // Now that we're attached, let's hash the UDK executable.
     // If the hash does not match what we think it should be, do not attach detours.
-    let exe_filename = get_module_filename(process, module)?;
+    let exe_filename = get_module_filename(process, module.into())?;
 
     let mut exe = std::fs::File::open(exe_filename)?;
     let hash = {
