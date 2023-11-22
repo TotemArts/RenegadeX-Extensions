@@ -1,4 +1,5 @@
-use windows::core::{implement, interface, IUnknown, IUnknown_Vtbl, GUID, HRESULT};
+use windows::core::{implement, IUnknown, IUnknown_Vtbl, GUID, HRESULT};
+use windows_interface::interface;
 use windows::Win32::Foundation::{BOOL, E_FAIL, S_OK};
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2SubmixVoice, IXAudio2Voice,
@@ -13,15 +14,16 @@ use windows::Win32::System::SystemInformation::NTDDI_WIN10;
 
 use paste::paste;
 use std::ffi::c_void;
+use std::mem::ManuallyDrop;
 use widestring::{WideCStr, WideChar};
 
 use crate::udk_log;
 
-fn debug_log(msg: std::fmt::Arguments) {
+fn log_warning(msg: std::fmt::Arguments) {
     let msg = std::fmt::format(msg);
 
     // Log to the UDK.
-    udk_log::log(udk_log::LogType::Init, &msg);
+    udk_log::log(udk_log::LogType::Warning, &msg);
 
     // Only bother logging when debug assertions are on.
     #[cfg(debug_assertions)]
@@ -49,23 +51,23 @@ fn wstr_array<const N: usize>(src: &WideCStr) -> [u16; N] {
 
 macro_rules! todo_log {
     () => {
-        debug_log(std::format_args!(
-            "HOOK: unimplemented: {}:{}",
+        log_warning(std::format_args!(
+            "XAudio27 HOOK: unimplemented: {}:{}",
             file!(),
             line!()
         ));
     };
     ($fmt:expr) => {
-        debug_log(std::format_args!(
-            concat!("HOOK: unimplemented: {}:{}: ", $fmt),
+        log_warning(std::format_args!(
+            concat!("XAudio27 HOOK: unimplemented: {}:{}: ", $fmt),
             file!(),
             line!(),
         ));
     };
 
     ($fmt:expr, $($args:tt),*) => {
-        debug_log(std::format_args!(
-            concat!("HOOK: unimplemented: {}:{}: ", $fmt),
+        log_warning(std::format_args!(
+            concat!("XAudio27 HOOK: unimplemented: {}:{}: ", $fmt),
             file!(),
             line!(),
             $($args),*
@@ -102,11 +104,11 @@ macro_rules! impl_iface {
             }
             impl ::core::convert::From<$implementation> for $iface {
                 fn from(this: $implementation) -> Self {
-                    const VTABLE: <$iface as ::windows::core::Vtable>::Vtable =
-                            <$iface as ::windows::core::Vtable>::Vtable::new::<$implementation>();
+                    const VTABLE: <$iface as ::windows::core::Interface>::Vtable =
+                            <$iface as ::windows::core::Interface>::Vtable::new::<$implementation>();
 
                     let this = [<$implementation _Impl>]::new(this);
-                    let mut this = ::std::boxed::Box::into_raw(::std::boxed::Box::new(this));
+                    let this = ::std::boxed::Box::into_raw(::std::boxed::Box::new(this));
 
                     let container = ::windows::core::ScopedHeap {
                         vtable: &VTABLE as *const _ as *const _,
@@ -126,8 +128,8 @@ macro_rules! impl_iface {
                 }
             }
             impl ::windows::core::AsImpl<$implementation> for $iface {
-                fn as_impl(&self) -> &$implementation {
-                    let this = ::windows::core::Vtable::as_raw(self);
+                unsafe fn as_impl(&self) -> &$implementation {
+                    let this = ::windows::core::Interface::as_raw(self);
                     unsafe {
                         let this = (this as *mut *mut ::core::ffi::c_void).sub(0 + 0)
                             as *mut [<$implementation _Impl>];
@@ -559,12 +561,12 @@ unsafe fn translate_send_list(sends: *const XAudio27VoiceSends) -> Vec<XAUDIO2_S
 
             sends_out.push(XAUDIO2_SEND_DESCRIPTOR {
                 Flags: send.Flags,
-                pOutputVoice: Some(inner_voice),
+                pOutputVoice: ManuallyDrop::new(Some(inner_voice)),
             })
         } else {
             sends_out.push(XAUDIO2_SEND_DESCRIPTOR {
                 Flags: send.Flags,
-                pOutputVoice: None,
+                pOutputVoice: ManuallyDrop::new(None),
             })
         }
     }
@@ -872,7 +874,7 @@ impl IXAudio27MasteringVoice_Impl for XAudio27MasteringVoiceWrapper {
     }
 
     unsafe fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL) {
-        self.0.GetEffectState(effect_index, enabled_out).into()
+        *enabled_out = self.0.GetEffectState(effect_index).into()
     }
 
     unsafe fn SetEffectParameters(
@@ -909,7 +911,7 @@ impl IXAudio27MasteringVoice_Impl for XAudio27MasteringVoiceWrapper {
     }
 
     unsafe fn GetFilterParameters(&self, parameters: *mut XAUDIO2_FILTER_PARAMETERS) {
-        self.0.GetFilterParameters(parameters)
+        *parameters = self.0.GetFilterParameters()
     }
 
     unsafe fn SetOutputFilterParameters(
@@ -935,7 +937,7 @@ impl IXAudio27MasteringVoice_Impl for XAudio27MasteringVoiceWrapper {
     }
 
     unsafe fn GetVolume(&self, volume: *mut f32) {
-        self.0.GetVolume(volume)
+        *volume = self.0.GetVolume()
     }
 
     unsafe fn SetChannelVolumes(
@@ -1017,7 +1019,7 @@ impl IXAudio27SubmixVoice_Impl for XAudio27SubmixVoiceWrapper {
     }
 
     unsafe fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL) {
-        self.0.GetEffectState(effect_index, enabled_out).into()
+        *enabled_out = self.0.GetEffectState(effect_index).into()
     }
 
     unsafe fn SetEffectParameters(
@@ -1054,7 +1056,7 @@ impl IXAudio27SubmixVoice_Impl for XAudio27SubmixVoiceWrapper {
     }
 
     unsafe fn GetFilterParameters(&self, parameters: *mut XAUDIO2_FILTER_PARAMETERS) {
-        self.0.GetFilterParameters(parameters)
+        *parameters = self.0.GetFilterParameters()
     }
 
     unsafe fn SetOutputFilterParameters(
@@ -1080,7 +1082,7 @@ impl IXAudio27SubmixVoice_Impl for XAudio27SubmixVoiceWrapper {
     }
 
     unsafe fn GetVolume(&self, volume: *mut f32) {
-        self.0.GetVolume(volume)
+        *volume = self.0.GetVolume()
     }
 
     unsafe fn SetChannelVolumes(
@@ -1176,7 +1178,7 @@ impl IXAudio27SourceVoice_Impl for XAudio27SourceVoiceWrapper {
     }
 
     unsafe fn GetEffectState(&self, effect_index: u32, enabled_out: *mut BOOL) {
-        self.0.GetEffectState(effect_index, enabled_out).into()
+        *enabled_out = self.0.GetEffectState(effect_index).into()
     }
 
     unsafe fn SetEffectParameters(
@@ -1213,7 +1215,7 @@ impl IXAudio27SourceVoice_Impl for XAudio27SourceVoiceWrapper {
     }
 
     unsafe fn GetFilterParameters(&self, parameters: *mut XAUDIO2_FILTER_PARAMETERS) {
-        self.0.GetFilterParameters(parameters)
+        *parameters = self.0.GetFilterParameters()
     }
 
     unsafe fn SetOutputFilterParameters(
@@ -1239,7 +1241,7 @@ impl IXAudio27SourceVoice_Impl for XAudio27SourceVoiceWrapper {
     }
 
     unsafe fn GetVolume(&self, volume: *mut f32) {
-        self.0.GetVolume(volume)
+        *volume = self.0.GetVolume()
     }
 
     unsafe fn SetChannelVolumes(
@@ -1337,7 +1339,7 @@ impl IXAudio27SourceVoice_Impl for XAudio27SourceVoiceWrapper {
     }
 
     unsafe fn GetFrequencyRatio(&self, ratio: *mut f32) {
-        self.0.GetFrequencyRatio(ratio)
+        *ratio = self.0.GetFrequencyRatio()
     }
 
     unsafe fn SetSourceSampleRate(&self, new_sample_rate: u32) -> HRESULT {
