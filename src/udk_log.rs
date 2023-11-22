@@ -24,7 +24,7 @@ pub fn log(typ: LogType, msg: &str) {
     let log_fn: UDKLogFn = unsafe { std::mem::transmute(udk_slice.as_ptr().add(DEBUG_FN_OFFSET)) };
 
     // Convert the UTF-8 Rust string into an OS wide string.
-    let wmsg: widestring::U16CString = widestring::WideCString::from_str(format!("discord.dll: {}", msg)).unwrap();
+    let wmsg: widestring::U16CString = widestring::WideCString::from_str(format!("TotemArts Extensions: {}", msg)).unwrap();
 
     unsafe {
         (log_fn)(log_obj as usize, typ as u32, wmsg.as_ptr());
