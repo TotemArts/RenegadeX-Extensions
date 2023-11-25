@@ -2,7 +2,7 @@
 use anyhow::Context;
 use retour::static_detour;
 
-use crate::get_udk_slice;
+use crate::get_udk_ptr;
 use crate::udk_log::{log, LogType};
 use crate::udk_offsets::{UDK_CREATEFX_PTR_OFFSET, UDK_XAUDIO2CREATE_OFFSET};
 use crate::xaudio27::{IXAudio27, XAudio27Wrapper};
@@ -98,13 +98,13 @@ fn xaudio2create_hook(xaudio2_out: *mut IXAudio27, _flags: u32, _processor: u32)
 }
 
 pub fn init() -> anyhow::Result<()> {
-    let udk = get_udk_slice();
+    let udk = get_udk_ptr();
 
     // SAFETY: This is only safe if the UDK binary matches what we expect.
     unsafe {
         XAudio2CreateHook
             .initialize(
-                std::mem::transmute(udk.as_ptr().add(UDK_XAUDIO2CREATE_OFFSET)),
+                std::mem::transmute(udk.add(UDK_XAUDIO2CREATE_OFFSET)),
                 xaudio2create_hook,
             )
             .context("Failed to setup InitializeHardware hook")?;
@@ -113,14 +113,14 @@ pub fn init() -> anyhow::Result<()> {
 
         // Enable RW access to the CreateFX pointer.
         let _guard = region::protect_with_handle(
-            udk.as_ptr().add(UDK_CREATEFX_PTR_OFFSET),
+            udk.add(UDK_CREATEFX_PTR_OFFSET),
             8,
             region::Protection::READ_WRITE,
         )
         .context("failed to adjust memory protection for CreateFX")?;
 
         // Overwrite xapofx!CreateFX pointer with our hook.
-        (udk.as_ptr().add(UDK_CREATEFX_PTR_OFFSET) as *mut usize).write(createfx_hook as usize);
+        (udk.add(UDK_CREATEFX_PTR_OFFSET) as *mut usize).write(createfx_hook as usize);
     }
 
     Ok(())
