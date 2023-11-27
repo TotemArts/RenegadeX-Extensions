@@ -1,5 +1,5 @@
 //! This module contains functionality relevant to UDK logging.
-use crate::get_udk_slice;
+use crate::get_udk_ptr;
 
 use crate::udk_offsets::{DEBUG_FN_OFFSET, DEBUG_LOG_OFFSET};
 
@@ -19,9 +19,9 @@ pub enum LogType {
 
 /// Log a message via the UDK logging framework.
 pub fn log(typ: LogType, msg: &str) {
-    let udk_slice = get_udk_slice();
-    let log_obj = unsafe { udk_slice.as_ptr().add(DEBUG_LOG_OFFSET) };
-    let log_fn: UDKLogFn = unsafe { std::mem::transmute(udk_slice.as_ptr().add(DEBUG_FN_OFFSET)) };
+    let udk_slice = get_udk_ptr();
+    let log_obj = unsafe { udk_slice.add(DEBUG_LOG_OFFSET) };
+    let log_fn: UDKLogFn = unsafe { std::mem::transmute(udk_slice.add(DEBUG_FN_OFFSET)) };
 
     // Convert the UTF-8 Rust string into an OS wide string.
     let wmsg: widestring::U16CString = widestring::WideCString::from_str(format!("TotemArts Extensions: {}", msg)).unwrap();

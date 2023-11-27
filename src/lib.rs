@@ -19,6 +19,9 @@ const UDK_KNOWN_HASH: [u8; 32] = [
     0x6C, 0x1E, 0x8F, 0x9E, 0xF0, 0x70, 0x40, 0xB8, 0xF9, 0x96, 0x73, 0x8A, 0x00, 0xFB, 0x90, 0x07,
 ];
 
+use std::ops::Range;
+use std::sync::OnceLock;
+
 use anyhow::Context;
 use sha2::{Digest, Sha256};
 
@@ -36,16 +39,15 @@ use windows::Win32::{
     },
 };
 
-/// Cached slice of UDK.exe. This is only touched once upon init, and
-/// never written again.
-// FIXME: The slice is actually unsafe to access; sections of memory may be unmapped!
-// We should use a raw pointer slice instead (if ergonomics permit doing so).
-static mut UDK_SLICE: Option<&'static [u8]> = None;
+/// Cached memory range for UDK.exe
+static UDK_RANGE: OnceLock<Range<usize>> = OnceLock::new();
 
-/// Return a slice of UDK.exe
-pub fn get_udk_slice() -> &'static [u8] {
-    // SAFETY: This is only touched once in DllMain.
-    unsafe { UDK_SLICE.unwrap() }
+/// Return the base pointer for UDK.exe
+pub fn get_udk_ptr() -> *const u8 {
+    let range = UDK_RANGE.get().unwrap();
+
+    // TODO: Once Rust gets better raw slice support, we should return a `*const [u8]` instead.
+    range.start as *const u8
 }
 
 /// Wrapped version of the Win32 OutputDebugString.
@@ -93,20 +95,14 @@ fn get_module_information(process: HANDLE, module: HINSTANCE) -> windows::core::
     }
 }
 
-/// Create a raw slice from a MODULEINFO structure.
-fn get_module_slice(info: &MODULEINFO) -> *const [u8] {
-    core::ptr::slice_from_raw_parts(info.lpBaseOfDll as *const u8, info.SizeOfImage as usize)
-}
-
 /// Called upon DLL attach. This function verifies the UDK and initializes
 /// hooks if the UDK matches our known hash.
 fn dll_attach() -> anyhow::Result<()> {
     let process = unsafe { GetCurrentProcess() };
     let module = unsafe { GetModuleHandleA(None) }.context("failed to get module handle")?;
 
-    let exe_slice = get_module_slice(
-        &get_module_information(process, module.into()).expect("Failed to get module information for UDK"),
-    );
+    let exe_info = get_module_information(process, module.into())
+        .context("Failed to get module information for UDK")?;
 
     // Now that we're attached, let's hash the UDK executable.
     // If the hash does not match what we think it should be, do not attach detours.
@@ -127,9 +123,12 @@ fn dll_attach() -> anyhow::Result<()> {
     }
 
     // Cache the UDK slice.
-    unsafe {
-        UDK_SLICE = Some(exe_slice.as_ref().unwrap());
-    }
+    UDK_RANGE
+        .set(Range {
+            start: exe_info.lpBaseOfDll as usize,
+            end: exe_info.lpBaseOfDll as usize + exe_info.SizeOfImage as usize,
+        })
+        .unwrap();
 
     // Initialize detours.
     udk_xaudio::init()?;

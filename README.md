@@ -12,7 +12,6 @@ Installation simply involves copying our DLL into the game's binary directory. N
    * `udk_offsets.rs` - Constants describing important offsets in the UDK binary
    * `udk_xaudio.rs` - UDK XAudio FFI and detours
    * `xaudio27.rs` - XAudio2.7 -> 2.9 compatibility layer
- * `winbindings/` - Windows API Rust bindings.
 
 ## Loading the extensions
 When the system loads the UDK, it will load all DLL dependencies alongside the UDK before executing any game code.
