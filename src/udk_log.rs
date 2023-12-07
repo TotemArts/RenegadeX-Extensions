@@ -25,7 +25,7 @@ pub enum LogType {
     //Debug = 0x36c,
     //Log = 0x2f8,
     Warning = 0x2ff,
-    //Error = 0x315,
+    Error = 0x315,
     //Critical = 0x2f9,
 }
 

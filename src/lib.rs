@@ -6,3 +6,8 @@ mod xaudio27;
 mod dll;
 mod udk_log;
 mod udk_xaudio;
+
+pub fn post_udk_init() -> anyhow::Result<()> {
+    udk_xaudio::init()?;
+    Ok(())
+}

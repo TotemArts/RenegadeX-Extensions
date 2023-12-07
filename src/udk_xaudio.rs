@@ -2,7 +2,7 @@
 use anyhow::Context;
 use retour::static_detour;
 
-use crate::get_udk_ptr;
+use crate::dll::get_udk_ptr;
 use crate::udk_log::{log, LogType};
 use crate::xaudio27::{IXAudio27, XAudio27Wrapper};
 

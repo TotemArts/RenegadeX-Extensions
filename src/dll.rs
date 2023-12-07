@@ -2,6 +2,7 @@ use std::os::windows::fs::FileExt;
 use std::{ops::Range, fs::File};
 use std::sync::OnceLock;
 
+use crate::{post_udk_init, udk_log};
 use sha2::{Digest, Sha256};
 
 use windows::{
@@ -19,10 +20,14 @@ use windows::{
     core::Error,
 };
 
-pub fn dll_main(_hinst_dll: HINSTANCE, fdw_reason: u32, _lpv_reserved: usize) -> i32 {
+#[no_mangle]
+pub extern "stdcall" fn dll_main(_hinst_dll: HINSTANCE, fdw_reason: u32, _lpv_reserved: usize) -> i32 {
     match fdw_reason {
         DLL_PROCESS_ATTACH => {
-            dll_attach()
+            dll_attach();
+            if let Err(error) = post_udk_init() {
+                udk_log::log(udk_log::LogType::Error, &format!("An error occurred initializing the library: {}", error))
+            }
         }
         DLL_PROCESS_DETACH => {}
 
