@@ -21,7 +21,7 @@ use windows::{
 };
 
 #[no_mangle]
-pub extern "stdcall" fn dll_main(_hinst_dll: HINSTANCE, fdw_reason: u32, _lpv_reserved: usize) -> i32 {
+pub extern "stdcall" fn DllMain(_hinst_dll: HINSTANCE, fdw_reason: u32, _lpv_reserved: usize) -> i32 {
     match fdw_reason {
         DLL_PROCESS_ATTACH => {
             dll_attach();
