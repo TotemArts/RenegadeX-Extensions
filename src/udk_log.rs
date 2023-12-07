@@ -1,7 +1,19 @@
 //! This module contains functionality relevant to UDK logging.
-use crate::get_udk_ptr;
+use crate::dll::get_udk_ptr;
 
-use crate::udk_offsets::{DEBUG_FN_OFFSET, DEBUG_LOG_OFFSET};
+/// Offset from the beginning of UDK64.exe to the debug log object.
+#[cfg(target_arch = "x86_64")]
+const DEBUG_LOG_OFFSET: usize = 0x0355_1720;
+/// Address of UDK's log function.
+#[cfg(target_arch = "x86_64")]
+const DEBUG_FN_OFFSET: usize = 0x0024_6A20;
+
+/// Offset from the beginning of UDK64.exe to the debug log object.
+#[cfg(target_arch = "x86")]
+const DEBUG_LOG_OFFSET: usize = 0x029a_31a8;
+/// Address of UDK's log function.
+#[cfg(target_arch = "x86")]
+const DEBUG_FN_OFFSET: usize = 0x0002_1c500;
 
 /// This is the type signature of UDK's log function.
 type UDKLogFn = unsafe extern "C" fn(usize, u32, *const widestring::WideChar);
@@ -19,9 +31,9 @@ pub enum LogType {
 
 /// Log a message via the UDK logging framework.
 pub fn log(typ: LogType, msg: &str) {
-    let udk_slice = get_udk_ptr();
-    let log_obj = unsafe { udk_slice.add(DEBUG_LOG_OFFSET) };
-    let log_fn: UDKLogFn = unsafe { std::mem::transmute(udk_slice.add(DEBUG_FN_OFFSET)) };
+    let udk_ptr = get_udk_ptr();
+    let log_obj = unsafe { udk_ptr.add(DEBUG_LOG_OFFSET) };
+    let log_fn: UDKLogFn = unsafe { std::mem::transmute(udk_ptr.add(DEBUG_FN_OFFSET)) };
 
     // Convert the UTF-8 Rust string into an OS wide string.
     let wmsg: widestring::U16CString = widestring::WideCString::from_str(format!("TotemArts Extensions: {}", msg)).unwrap();

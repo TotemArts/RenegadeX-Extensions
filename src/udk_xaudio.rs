@@ -4,11 +4,17 @@ use retour::static_detour;
 
 use crate::get_udk_ptr;
 use crate::udk_log::{log, LogType};
-use crate::udk_offsets::{UDK_CREATEFX_PTR_OFFSET, UDK_XAUDIO2CREATE_OFFSET};
 use crate::xaudio27::{IXAudio27, XAudio27Wrapper};
 
 use windows::core::{GUID, HRESULT};
 use windows::Win32::Foundation::{E_FAIL, S_OK};
+
+// pub const UDK_INITHW_OFFSET: usize = 0x0171_1ED0;
+// pub const UDK_XAUDIO2_OFFSET: usize = 0x036C_90F8;
+#[cfg(target_arch = "x86_64")]
+pub const UDK_XAUDIO2CREATE_OFFSET: usize = 0x0170_F4D0;
+#[cfg(target_arch = "x86_64")]
+pub const UDK_CREATEFX_PTR_OFFSET: usize = 0x024B_E8B0;
 
 static_detour! {
     static XAudio2CreateHook: extern "C" fn(*mut IXAudio27, u32, u32) -> HRESULT;
